@@ -1,0 +1,64 @@
+{
+  "name": "pplx",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Modern CLI for the Perplexity AI API - search, query, and research from your terminal",
+  "bin": {
+    "pplx": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "install:global": "npm run build && npm install -g .",
+    "uninstall:global": "npm uninstall -g pplx",
+    "link": "npm run build && npm link",
+    "unlink": "npm unlink -g pplx",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "perplexity",
+    "cli",
+    "ai",
+    "search",
+    "sonar",
+    "deep-research",
+    "terminal",
+    "perplexity-api",
+    "ai-assistant",
+    "command-line"
+  ],
+  "author": "Patrick Ruddiman",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PatrickRuddiman/pplx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PatrickRuddiman/pplx/issues"
+  },
+  "homepage": "https://github.com/PatrickRuddiman/pplx#readme",
+  "dependencies": {
+    "@perplexity-ai/perplexity_ai": "^0.18.0",
+    "commander": "^14.0.0",
+    "chalk": "^5.4.0",
+    "ora": "^9.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ]
+}
