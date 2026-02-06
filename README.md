@@ -9,7 +9,7 @@ Modern CLI for the Perplexity AI API. Search, query, reason, and research from y
 ### From npm
 
 ```bash
-npm install -g pplx
+npm install -g @pruddiman/pplx
 ```
 
 ### From source
@@ -46,7 +46,7 @@ npm run unlink
 ### Run without installing
 
 ```bash
-npx pplx "What is quantum computing?"
+npx @pruddiman/pplx "What is quantum computing?"
 ```
 
 ## Setup

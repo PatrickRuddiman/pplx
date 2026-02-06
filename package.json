@@ -1,18 +1,19 @@
 {
-  "name": "pplx",
+  "name": "@pruddiman/pplx",
   "version": "1.0.0",
   "type": "module",
   "description": "Modern CLI for the Perplexity AI API - search, query, and research from your terminal",
   "bin": {
-    "pplx": "./dist/index.js"
+    "pplx": "./dist/index.js",
+    "pplx-cli": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "install:global": "npm run build && npm install -g .",
-    "uninstall:global": "npm uninstall -g pplx",
+    "uninstall:global": "npm uninstall -g @pruddiman/pplx",
     "link": "npm run build && npm link",
-    "unlink": "npm unlink -g pplx",
+    "unlink": "npm unlink -g @pruddiman/pplx",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -60,5 +61,8 @@
     "dist/",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
