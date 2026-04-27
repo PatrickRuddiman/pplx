@@ -191,9 +191,12 @@ export function resolveModel(flagModel?: string): string {
 }
 
 export interface KeyStorageInfo {
+  /** The keychain backend selected on this platform (independent of where the key actually lives). */
   backend: 'macos' | 'libsecret' | 'wincred' | 'none';
+  /** Description of the *active* storage location for the current key. */
   description: string;
   hasKey: boolean;
+  /** Where the active key is actually being read from. */
   source: 'keychain' | 'file' | 'env' | 'none';
 }
 
@@ -205,14 +208,16 @@ export function getKeyStorageInfo(): KeyStorageInfo {
   if (process.env.PERPLEXITY_API_KEY) {
     source = 'env';
     hasKey = true;
-  } else if (backend.id !== 'none') {
-    try {
-      if (backend.load()) {
-        source = 'keychain';
-        hasKey = true;
+  } else {
+    if (backend.id !== 'none') {
+      try {
+        if (backend.load()) {
+          source = 'keychain';
+          hasKey = true;
+        }
+      } catch {
+        // keychain not readable — fall through to file
       }
-    } catch {
-      // ignore
     }
     if (!hasKey) {
       const stored = readConfigFile();
@@ -221,20 +226,20 @@ export function getKeyStorageInfo(): KeyStorageInfo {
         hasKey = true;
       }
     }
-  } else {
-    const stored = readConfigFile();
-    if (typeof stored.apiKey === 'string' && stored.apiKey.length > 0) {
-      source = 'file';
-      hasKey = true;
-    }
   }
 
-  return {
-    backend: backend.id,
-    description: backend.description,
-    hasKey,
-    source,
-  };
+  let description: string;
+  if (source === 'env') {
+    description = 'PERPLEXITY_API_KEY environment variable (not persisted)';
+  } else if (source === 'keychain') {
+    description = backend.description;
+  } else if (source === 'file') {
+    description = 'AES-encrypted at rest in config.json (file fallback)';
+  } else {
+    description = 'no key configured';
+  }
+
+  return { backend: backend.id, description, hasKey, source };
 }
 
 export function _resetConfigDir(): void {

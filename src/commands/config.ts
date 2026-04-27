@@ -9,21 +9,38 @@ const BACKEND_LABEL: Record<ReturnType<typeof getKeyStorageInfo>['backend'], str
   macos: 'macOS Keychain',
   libsecret: 'Linux Secret Service (libsecret)',
   wincred: 'Windows Credential Manager',
-  none: 'encrypted file (no OS keychain available)',
+  none: 'no OS keychain available',
 };
 
 export function reportKeyStorage(): void {
   const info = getKeyStorageInfo();
-  const label = BACKEND_LABEL[info.backend];
   if (info.source === 'keychain') {
-    console.log(chalk.green(`Stored in ${label}.`));
-  } else if (info.source === 'file') {
-    console.log(chalk.yellow(`Stored in ${label}.`));
+    console.log(chalk.green(`Stored in ${BACKEND_LABEL[info.backend]}.`));
+    return;
+  }
+  if (info.source === 'file') {
+    console.log(chalk.yellow('Stored in encrypted file at rest (config.json).'));
+    if (info.backend !== 'none') {
+      console.log(
+        chalk.gray(
+          `  ${BACKEND_LABEL[info.backend]} was detected on this system but the write/read failed — falling back to file.`,
+        ),
+      );
+      console.log(
+        chalk.gray(
+          process.platform === 'linux'
+            ? '  On Linux, libsecret needs a running keyring (e.g. gnome-keyring) and an unlocked D-Bus session.'
+            : '  Check that your OS keychain service is reachable.',
+        ),
+      );
+    } else {
+      console.log(chalk.gray('  No OS keychain backend is available on this system.'));
+    }
     console.log(
       chalk.gray(
-        '  No OS keychain was detected, so the key is AES-encrypted at rest in the config file. ' +
-          'This defeats casual file reads but is not strong against an attacker that reads the CLI bundle. ' +
-          'For agent workflows, prefer `pplx claw` so the key never leaves this process.',
+        '  AES-256-GCM with a machine-derived key. This stops casual file reads but is not strong ' +
+          'against an attacker that reads the CLI bundle. For agent workflows, prefer `pplx claw` ' +
+          'so the key never leaves this process.',
       ),
     );
   }

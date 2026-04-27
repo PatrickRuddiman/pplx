@@ -58,13 +58,25 @@ describe('config command', () => {
       await program.parseAsync(['node', 'pplx', 'config', 'set-key', 'pplx-test-12345678']);
       const out = output();
       // PPLX_DISABLE_KEYCHAIN=1 in beforeEach forces the file fallback
-      expect(out).toContain('encrypted file');
+      expect(out).toContain('encrypted file at rest');
+      // Should NOT claim it landed in a keychain
+      expect(out).not.toContain('Stored in macOS Keychain');
+      expect(out).not.toContain('Stored in Linux Secret Service');
+    });
+
+    it('does not claim a keychain when only the file has the key', async () => {
+      // simulates user's case: secret-tool detected but unwriteable → file fallback
+      const program = makeProgram();
+      await program.parseAsync(['node', 'pplx', 'config', 'set-key', 'pplx-test-key']);
+      const out = output();
+      expect(out).toContain('Stored in encrypted file at rest');
+      expect(out).toContain('AES-256-GCM');
     });
 
     it('top-level set-key alias also reports the storage backend', async () => {
       const program = makeProgram();
       await program.parseAsync(['node', 'pplx', 'set-key', 'pplx-alias-key']);
-      expect(output()).toContain('encrypted file');
+      expect(output()).toContain('encrypted file at rest');
     });
 
     it('view-key shows masked key', async () => {
