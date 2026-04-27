@@ -5,6 +5,30 @@ import { printSuccess } from '../lib/output.js';
 
 const VALID_DEFAULTS = ['model', 'stream', 'searchMode', 'contextSize', 'language', 'safeSearch'] as const;
 
+const BACKEND_LABEL: Record<ReturnType<typeof getKeyStorageInfo>['backend'], string> = {
+  macos: 'macOS Keychain',
+  libsecret: 'Linux Secret Service (libsecret)',
+  wincred: 'Windows Credential Manager',
+  none: 'encrypted file (no OS keychain available)',
+};
+
+export function reportKeyStorage(): void {
+  const info = getKeyStorageInfo();
+  const label = BACKEND_LABEL[info.backend];
+  if (info.source === 'keychain') {
+    console.log(chalk.green(`Stored in ${label}.`));
+  } else if (info.source === 'file') {
+    console.log(chalk.yellow(`Stored in ${label}.`));
+    console.log(
+      chalk.gray(
+        '  No OS keychain was detected, so the key is AES-encrypted at rest in the config file. ' +
+          'This defeats casual file reads but is not strong against an attacker that reads the CLI bundle. ' +
+          'For agent workflows, prefer `pplx claw` so the key never leaves this process.',
+      ),
+    );
+  }
+}
+
 export function registerConfigCommand(program: Command): void {
   const config = program
     .command('config')
@@ -18,6 +42,7 @@ export function registerConfigCommand(program: Command): void {
       cfg.apiKey = key;
       saveConfig(cfg);
       printSuccess('API key set successfully.');
+      reportKeyStorage();
     });
 
   config
@@ -117,6 +142,7 @@ export function registerConfigCommand(program: Command): void {
       cfg.apiKey = key;
       saveConfig(cfg);
       printSuccess('API key set successfully.');
+      reportKeyStorage();
     });
 
   program

@@ -53,6 +53,20 @@ describe('config command', () => {
       expect(getConfig().apiKey).toBe('pplx-test-12345678');
     });
 
+    it('set-key reports the storage backend it used', async () => {
+      const program = makeProgram();
+      await program.parseAsync(['node', 'pplx', 'config', 'set-key', 'pplx-test-12345678']);
+      const out = output();
+      // PPLX_DISABLE_KEYCHAIN=1 in beforeEach forces the file fallback
+      expect(out).toContain('encrypted file');
+    });
+
+    it('top-level set-key alias also reports the storage backend', async () => {
+      const program = makeProgram();
+      await program.parseAsync(['node', 'pplx', 'set-key', 'pplx-alias-key']);
+      expect(output()).toContain('encrypted file');
+    });
+
     it('view-key shows masked key', async () => {
       saveConfig({ apiKey: 'abcdefghij1234567890' });
       const program = makeProgram();
