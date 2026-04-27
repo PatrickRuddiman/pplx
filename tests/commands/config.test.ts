@@ -15,6 +15,7 @@ describe('config command', () => {
   beforeEach(() => {
     _resetConfigDir();
     process.env.PERPLEXITY_CONFIG_DIR = TEST_DIR;
+    process.env.PPLX_DISABLE_KEYCHAIN = '1';
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -24,6 +25,7 @@ describe('config command', () => {
     errSpy.mockRestore();
     _resetConfigDir();
     delete process.env.PERPLEXITY_CONFIG_DIR;
+    delete process.env.PPLX_DISABLE_KEYCHAIN;
     if (fs.existsSync(TEST_DIR)) {
       fs.rmSync(TEST_DIR, { recursive: true, force: true });
     }

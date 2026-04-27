@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { getConfig, saveConfig, getConfigDir } from '../lib/config.js';
+import { getConfig, saveConfig, getConfigDir, getKeyStorageInfo } from '../lib/config.js';
 import { printSuccess } from '../lib/output.js';
 
 const VALID_DEFAULTS = ['model', 'stream', 'searchMode', 'contextSize', 'language', 'safeSearch'] as const;
@@ -87,8 +87,10 @@ export function registerConfigCommand(program: Command): void {
     .description('Show all configuration')
     .action(() => {
       const cfg = getConfig();
+      const info = getKeyStorageInfo();
       console.log(chalk.cyan('Configuration:'));
       console.log(`  ${chalk.white('API key:')} ${cfg.apiKey ? chalk.green('set') : chalk.red('not set')}`);
+      console.log(`  ${chalk.white('Source:')} ${chalk.yellow(info.source)} ${chalk.gray(`(${info.description})`)}`);
       console.log(`  ${chalk.white('Config path:')} ${chalk.gray(getConfigDir())}`);
       if (cfg.defaults && Object.keys(cfg.defaults).length > 0) {
         console.log();

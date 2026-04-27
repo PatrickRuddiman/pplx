@@ -10,6 +10,7 @@ describe('config', () => {
   beforeEach(() => {
     _resetConfigDir();
     process.env.PERPLEXITY_CONFIG_DIR = TEST_DIR;
+    process.env.PPLX_DISABLE_KEYCHAIN = '1';
     delete process.env.PERPLEXITY_API_KEY;
     delete process.env.PERPLEXITY_MODEL;
   });
@@ -17,6 +18,7 @@ describe('config', () => {
   afterEach(() => {
     _resetConfigDir();
     delete process.env.PERPLEXITY_CONFIG_DIR;
+    delete process.env.PPLX_DISABLE_KEYCHAIN;
     if (fs.existsSync(TEST_DIR)) {
       fs.rmSync(TEST_DIR, { recursive: true, force: true });
     }
@@ -122,6 +124,57 @@ describe('config', () => {
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, 'config.json'), 'not json');
       expect(getConfig()).toEqual({});
+    });
+  });
+
+  describe('encrypted key storage', () => {
+    it('stores apiKey as ciphertext on disk but exposes plaintext via getConfig', () => {
+      saveConfig({ apiKey: 'pplx-secret-12345' });
+      const raw = JSON.parse(fs.readFileSync(path.join(TEST_DIR, 'config.json'), 'utf8'));
+      expect(raw.apiKey).not.toBe('pplx-secret-12345');
+      expect(raw.apiKey).toMatch(/^enc:v1:/);
+
+      const cfg = getConfig();
+      expect(cfg.apiKey).toBe('pplx-secret-12345');
+    });
+
+    it('does not double-encrypt an already-encrypted apiKey', () => {
+      saveConfig({ apiKey: 'pplx-key' });
+      const onDisk = JSON.parse(fs.readFileSync(path.join(TEST_DIR, 'config.json'), 'utf8')).apiKey;
+      // Re-save passing the encrypted string back in (simulates round-trip via getConfig)
+      saveConfig({ apiKey: onDisk });
+      const onDisk2 = JSON.parse(fs.readFileSync(path.join(TEST_DIR, 'config.json'), 'utf8')).apiKey;
+      expect(onDisk2).toBe(onDisk);
+    });
+
+    it('migrates legacy plaintext key to encrypted on first read', () => {
+      fs.mkdirSync(TEST_DIR, { recursive: true });
+      const cfgPath = path.join(TEST_DIR, 'config.json');
+      fs.writeFileSync(cfgPath, JSON.stringify({ apiKey: 'legacy-plain-key' }));
+
+      const cfg = getConfig();
+      expect(cfg.apiKey).toBe('legacy-plain-key');
+
+      const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      expect(raw.apiKey).toMatch(/^enc:v1:/);
+    });
+
+    it('omits apiKey from getConfig when ciphertext cannot be decrypted', () => {
+      fs.mkdirSync(TEST_DIR, { recursive: true });
+      // valid format but garbage payload
+      fs.writeFileSync(
+        path.join(TEST_DIR, 'config.json'),
+        JSON.stringify({ apiKey: 'enc:v1:AAAA.BBBB.CCCC' }),
+      );
+      const cfg = getConfig();
+      expect(cfg.apiKey).toBeUndefined();
+    });
+
+    it('preserves defaults alongside encrypted apiKey', () => {
+      saveConfig({ apiKey: 'k', defaults: { model: 'sonar-pro' } });
+      const cfg = getConfig();
+      expect(cfg.apiKey).toBe('k');
+      expect(cfg.defaults?.model).toBe('sonar-pro');
     });
   });
 });
