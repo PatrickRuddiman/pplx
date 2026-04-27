@@ -109,4 +109,4 @@ export const MODEL_NAMES = Object.keys(MODELS) as ModelName[];
 export const DEFAULT_MODEL = 'sonar' as const;
 export const DEFAULT_SYSTEM_PROMPT = 'Be precise and concise.';
 export const APP_NAME = 'pplx';
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';

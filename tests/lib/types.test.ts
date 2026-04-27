@@ -29,6 +29,6 @@ describe('types', () => {
   it('has correct defaults', () => {
     expect(DEFAULT_MODEL).toBe('sonar');
     expect(APP_NAME).toBe('pplx');
-    expect(APP_VERSION).toBe('1.1.0');
+    expect(APP_VERSION).toBe('1.2.0');
   });
 });
