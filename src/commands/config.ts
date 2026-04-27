@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { getConfig, saveConfig, getConfigDir, getKeyStorageInfo } from '../lib/config.js';
 import { printSuccess } from '../lib/output.js';
+import { SECURITY_HELP_CONFIG_EXCERPT } from '../lib/security-help.js';
 
 const VALID_DEFAULTS = ['model', 'stream', 'searchMode', 'contextSize', 'language', 'safeSearch'] as const;
 
@@ -51,7 +52,9 @@ export function registerConfigCommand(program: Command): void {
     .command('config')
     .description('Manage configuration');
 
-  config
+  config.addHelpText('after', SECURITY_HELP_CONFIG_EXCERPT);
+
+  const setKey = config
     .command('set-key <key>')
     .description('Set the Perplexity API key')
     .action((key: string) => {
@@ -61,6 +64,7 @@ export function registerConfigCommand(program: Command): void {
       printSuccess('API key set successfully.');
       reportKeyStorage();
     });
+  setKey.addHelpText('after', SECURITY_HELP_CONFIG_EXCERPT);
 
   config
     .command('view-key')

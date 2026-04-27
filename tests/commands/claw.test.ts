@@ -465,6 +465,24 @@ describe('claw HTTP server', () => {
   });
 });
 
+describe('claw --help', () => {
+  it('points at pplx security so users can find the threat model', async () => {
+    const { Command } = await import('commander');
+    const { registerClawCommand } = await import('../../src/commands/claw.js');
+    const program = new Command();
+    registerClawCommand(program);
+    const claw = program.commands.find((c) => c.name() === 'claw') as InstanceType<typeof Command>;
+    expect(claw).toBeDefined();
+    const captured: string[] = [];
+    claw.configureOutput({
+      writeOut: (s) => captured.push(s),
+      writeErr: (s) => captured.push(s),
+    });
+    claw.outputHelp();
+    expect(captured.join('')).toContain('pplx security');
+  });
+});
+
 describe('claw constants', () => {
   it('default port is 49411', () => {
     expect(DEFAULT_CLAW_PORT).toBe(49411);

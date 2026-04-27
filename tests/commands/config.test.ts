@@ -42,6 +42,10 @@ describe('config command', () => {
   function makeProgram() {
     const program = new Command();
     program.exitOverride();
+    program.configureOutput({
+      writeOut: (s) => logSpy(s),
+      writeErr: (s) => logSpy(s),
+    });
     registerConfigCommand(program);
     return program;
   }
@@ -77,6 +81,29 @@ describe('config command', () => {
       const program = makeProgram();
       await program.parseAsync(['node', 'pplx', 'set-key', 'pplx-alias-key']);
       expect(output()).toContain('encrypted file at rest');
+    });
+
+    function captureHelp(cmd: Command): string {
+      const captured: string[] = [];
+      cmd.configureOutput({
+        writeOut: (s) => captured.push(s),
+        writeErr: (s) => captured.push(s),
+      });
+      cmd.outputHelp();
+      return captured.join('');
+    }
+
+    it('config --help points at pplx security', () => {
+      const program = makeProgram();
+      const config = program.commands.find((c) => c.name() === 'config') as Command;
+      expect(captureHelp(config)).toContain('pplx security');
+    });
+
+    it('config set-key --help points at pplx security', () => {
+      const program = makeProgram();
+      const config = program.commands.find((c) => c.name() === 'config') as Command;
+      const setKey = config.commands.find((c) => c.name() === 'set-key') as Command;
+      expect(captureHelp(setKey)).toContain('pplx security');
     });
 
     it('view-key shows masked key', async () => {

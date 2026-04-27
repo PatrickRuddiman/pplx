@@ -6,8 +6,10 @@ import { registerModelsCommand } from './commands/models.js';
 import { registerSearchCommand } from './commands/search.js';
 import { registerResearchCommand } from './commands/research.js';
 import { registerClawCommand } from './commands/claw.js';
+import { registerSecurityCommand } from './commands/security.js';
 import { getConfig } from './lib/config.js';
 import { APP_VERSION } from './lib/types.js';
+import { SECURITY_HELP_SHORT } from './lib/security-help.js';
 
 const program = new Command();
 
@@ -27,11 +29,14 @@ registerModelsCommand(program);
 registerSearchCommand(program);
 registerResearchCommand(program);
 registerClawCommand(program);
+registerSecurityCommand(program);
+
+program.addHelpText('after', SECURITY_HELP_SHORT);
 
 // Handle default behavior: treat unknown first argument as a query
 // This allows `pplx "What is TypeScript?"` without the `query` subcommand
 const knownCommands = new Set([
-  'query', 'config', 'history', 'models', 'search', 'research', 'claw',
+  'query', 'config', 'history', 'models', 'search', 'research', 'claw', 'security',
   'set-key', 'view-key', 'clear-key', 'help',
 ]);
 

@@ -22,6 +22,7 @@ import { buildMessages, buildBaseParams } from './query.js';
 import { buildSearchParams } from './search.js';
 import { DEFAULT_CLAW_PORT, DEFAULT_CLAW_HOST, MAX_CLAW_BODY_BYTES } from './claw-constants.js';
 import { buildOpenApiSpec } from './claw-openapi.js';
+import { SECURITY_HELP_CLAW_EXCERPT } from '../lib/security-help.js';
 
 export { DEFAULT_CLAW_PORT, DEFAULT_CLAW_HOST };
 const MAX_BODY_BYTES = MAX_CLAW_BODY_BYTES;
@@ -350,6 +351,7 @@ export function registerClawCommand(program: Command): void {
       `  GET    /research/:id           Status / result of an async research request\n` +
       `  GET    /history                Recent queries (?limit=N)\n` +
       `  GET    /history?threads=true   List conversation threads\n` +
-      `  GET    /threads/:id            Single thread by id\n`,
+      `  GET    /threads/:id            Single thread by id\n` +
+      SECURITY_HELP_CLAW_EXCERPT,
   );
 }
