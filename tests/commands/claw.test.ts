@@ -89,17 +89,113 @@ describe('claw routing', () => {
   });
 
   describe('GET /api', () => {
-    it('returns the self-describing doc', async () => {
+    it('returns the self-describing summary', async () => {
       const { client } = makeMockClient();
       const r = await routeRequest('GET', '/api', new URLSearchParams(), null, client);
       expect(r.status).toBe(200);
       expect(r.body).toBe(CLAW_API_DOC);
     });
 
-    it('also serves /openapi and /', async () => {
+    it('also serves /', async () => {
       const { client } = makeMockClient();
-      expect((await routeRequest('GET', '/openapi', new URLSearchParams(), null, client)).body).toBe(CLAW_API_DOC);
       expect((await routeRequest('GET', '/', new URLSearchParams(), null, client)).body).toBe(CLAW_API_DOC);
+    });
+
+    it('summary advertises /api/spec', () => {
+      const paths = CLAW_API_DOC.endpoints.map((e) => `${e.method} ${e.path}`);
+      expect(paths).toContain('GET /api/spec');
+      expect((CLAW_API_DOC as { specUrl: string }).specUrl).toBe('/api/spec');
+    });
+  });
+
+  describe('GET /api/spec (OpenAPI)', () => {
+    it('returns a valid OpenAPI 3 document', async () => {
+      const { client } = makeMockClient();
+      const r = await routeRequest('GET', '/api/spec', new URLSearchParams(), null, client);
+      expect(r.status).toBe(200);
+      const spec = r.body as Record<string, unknown>;
+      expect(spec.openapi).toMatch(/^3\./);
+      expect((spec.info as { title: string }).title).toBe('pplx claw');
+      expect((spec.info as { version: string }).version).toBeTruthy();
+      expect(spec.paths).toBeTypeOf('object');
+      expect(spec.components).toBeTypeOf('object');
+    });
+
+    it('declares every implemented route in the paths object', async () => {
+      const { client } = makeMockClient();
+      const r = await routeRequest('GET', '/api/spec', new URLSearchParams(), null, client);
+      const paths = (r.body as { paths: Record<string, unknown> }).paths;
+      for (const p of [
+        '/health',
+        '/api',
+        '/api/spec',
+        '/models',
+        '/query',
+        '/search',
+        '/research',
+        '/research/{id}',
+        '/history',
+        '/threads/{id}',
+      ]) {
+        expect(paths).toHaveProperty(p);
+      }
+    });
+
+    it('declares request schemas for POST endpoints', async () => {
+      const { client } = makeMockClient();
+      const r = await routeRequest('GET', '/api/spec', new URLSearchParams(), null, client);
+      const spec = r.body as { paths: Record<string, Record<string, { requestBody?: unknown }>> };
+      expect(spec.paths['/query'].post.requestBody).toBeDefined();
+      expect(spec.paths['/search'].post.requestBody).toBeDefined();
+      expect(spec.paths['/research'].post.requestBody).toBeDefined();
+    });
+
+    it('declares all referenced schemas under components.schemas', async () => {
+      const { client } = makeMockClient();
+      const r = await routeRequest('GET', '/api/spec', new URLSearchParams(), null, client);
+      const spec = r.body as { components: { schemas: Record<string, unknown> } };
+      const schemas = spec.components.schemas;
+      for (const name of [
+        'HealthResponse',
+        'Model',
+        'ErrorResponse',
+        'QueryRequest',
+        'ChatCompletion',
+        'SearchRequest',
+        'SearchResponse',
+        'SearchHit',
+        'ResearchRequest',
+        'ResearchSubmission',
+        'ResearchState',
+        'HistoryEntry',
+        'Thread',
+        'ThreadMessage',
+      ]) {
+        expect(schemas).toHaveProperty(name);
+      }
+    });
+
+    it('also serves /openapi and /openapi.json as aliases', async () => {
+      const { client } = makeMockClient();
+      const a = await routeRequest('GET', '/openapi', new URLSearchParams(), null, client);
+      const b = await routeRequest('GET', '/openapi.json', new URLSearchParams(), null, client);
+      expect((a.body as { openapi: string }).openapi).toMatch(/^3\./);
+      expect((b.body as { openapi: string }).openapi).toMatch(/^3\./);
+    });
+
+    it('every $ref points to an existing components.schemas/responses entry', async () => {
+      const { client } = makeMockClient();
+      const r = await routeRequest('GET', '/api/spec', new URLSearchParams(), null, client);
+      const json = JSON.stringify(r.body);
+      const refs = [...json.matchAll(/"\$ref"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+      const spec = r.body as { components: { schemas: Record<string, unknown>; responses: Record<string, unknown> } };
+      for (const ref of refs) {
+        const m = ref.match(/^#\/components\/(schemas|responses)\/(.+)$/);
+        expect(m, `unexpected $ref shape: ${ref}`).not.toBeNull();
+        if (!m) continue;
+        const bucket = m[1] === 'schemas' ? spec.components.schemas : spec.components.responses;
+        expect(bucket, `missing ${m[1]} entry: ${m[2]}`).toHaveProperty(m[2]);
+      }
     });
   });
 
@@ -344,6 +440,14 @@ describe('claw HTTP server', () => {
     const r = await request('GET', '/api');
     expect(r.status).toBe(200);
     expect((r.body as { name: string }).name).toContain('claw');
+  });
+
+  it('serves /api/spec as OpenAPI JSON', async () => {
+    const r = await request('GET', '/api/spec');
+    expect(r.status).toBe(200);
+    const spec = r.body as { openapi: string; paths: Record<string, unknown> };
+    expect(spec.openapi).toMatch(/^3\./);
+    expect(spec.paths).toHaveProperty('/query');
   });
 
   it('routes POST /search end-to-end', async () => {

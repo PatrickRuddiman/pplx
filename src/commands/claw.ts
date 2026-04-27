@@ -20,10 +20,11 @@ import {
 } from '../lib/types.js';
 import { buildMessages, buildBaseParams } from './query.js';
 import { buildSearchParams } from './search.js';
+import { DEFAULT_CLAW_PORT, DEFAULT_CLAW_HOST, MAX_CLAW_BODY_BYTES } from './claw-constants.js';
+import { buildOpenApiSpec } from './claw-openapi.js';
 
-export const DEFAULT_CLAW_PORT = 49411;
-export const DEFAULT_CLAW_HOST = '127.0.0.1';
-const MAX_BODY_BYTES = 1_000_000;
+export { DEFAULT_CLAW_PORT, DEFAULT_CLAW_HOST };
+const MAX_BODY_BYTES = MAX_CLAW_BODY_BYTES;
 
 export type ClawClient = Pick<Perplexity, 'chat' | 'search' | 'async'>;
 
@@ -38,9 +39,11 @@ export const CLAW_API_DOC = {
   description:
     'Localhost HTTP gateway for the Perplexity AI CLI. The CLI process holds the (encrypted-at-rest) API key; clients on this loopback never see it.',
   defaultBaseUrl: `http://${DEFAULT_CLAW_HOST}:${DEFAULT_CLAW_PORT}`,
+  specUrl: '/api/spec',
   endpoints: [
     { method: 'GET', path: '/health', summary: 'Liveness probe' },
     { method: 'GET', path: '/api', summary: 'This self-describing API document' },
+    { method: 'GET', path: '/api/spec', summary: 'OpenAPI 3.0 specification' },
     { method: 'GET', path: '/models', summary: 'List available Perplexity models' },
     {
       method: 'POST',
@@ -154,8 +157,12 @@ export async function routeRequest(
     return { status: 200, body: { ok: true, version: APP_VERSION } };
   }
 
-  if (method === 'GET' && (pathname === '/' || pathname === '/api' || pathname === '/openapi')) {
+  if (method === 'GET' && (pathname === '/' || pathname === '/api')) {
     return { status: 200, body: CLAW_API_DOC };
+  }
+
+  if (method === 'GET' && (pathname === '/api/spec' || pathname === '/openapi' || pathname === '/openapi.json')) {
+    return { status: 200, body: buildOpenApiSpec() };
   }
 
   if (method === 'GET' && pathname === '/models') {
@@ -287,8 +294,13 @@ export function registerClawCommand(program: Command): void {
     .description('Run a localhost HTTP gateway exposing the Perplexity API to local clients')
     .option('-p, --port <number>', `Port to listen on (default: ${DEFAULT_CLAW_PORT})`, String(DEFAULT_CLAW_PORT))
     .option('--host <host>', `Bind host; only loopback is accepted (default: ${DEFAULT_CLAW_HOST})`, DEFAULT_CLAW_HOST)
-    .option('--print-api', 'Print the JSON API document and exit (the same payload as GET /api)')
-    .action((options: { port?: string; host?: string; printApi?: boolean }) => {
+    .option('--print-api', 'Print the human-readable API summary as JSON and exit (same payload as GET /api)')
+    .option('--print-spec', 'Print the OpenAPI 3.0 specification as JSON and exit (same payload as GET /api/spec)')
+    .action((options: { port?: string; host?: string; printApi?: boolean; printSpec?: boolean }) => {
+      if (options.printSpec) {
+        console.log(JSON.stringify(buildOpenApiSpec(), null, 2));
+        return;
+      }
       if (options.printApi) {
         console.log(JSON.stringify(CLAW_API_DOC, null, 2));
         return;
@@ -306,24 +318,31 @@ export function registerClawCommand(program: Command): void {
         const addr = server.address() as AddressInfo;
         const base = `http://${host}:${addr.port}`;
         console.log(`pplx claw listening on ${base}`);
-        console.log(`API doc:    GET ${base}/api`);
-        console.log(`Health:     GET ${base}/health`);
+        console.log(`API summary:  GET ${base}/api`);
+        console.log(`OpenAPI spec: GET ${base}/api/spec`);
+        console.log(`Health:       GET ${base}/health`);
         console.log('');
         console.log('Loopback only — connections from non-127.0.0.1 are refused.');
-        console.log('The CLI process holds the encrypted API key; clients never see it.');
+        console.log('The CLI process holds the API key; clients never see it.');
       });
     });
 
   cmd.addHelpText(
     'after',
     `\nExample workflow for an AI agent:\n` +
-      `  1. pplx config set-key <YOUR_KEY>          # one-time, stored encrypted at rest\n` +
-      `  2. pplx claw                               # start gateway on http://${DEFAULT_CLAW_HOST}:${DEFAULT_CLAW_PORT}\n` +
-      `  3. curl http://${DEFAULT_CLAW_HOST}:${DEFAULT_CLAW_PORT}/api  # discover endpoints\n` +
-      `  4. POST /query, /search, /research        # call features without the API key\n\n` +
-      `Endpoints (also available as JSON via GET /api or 'pplx claw --print-api'):\n` +
+      `  1. pplx config set-key <YOUR_KEY>           # one-time, stored in OS keychain or encrypted file\n` +
+      `  2. pplx claw                                # start gateway on http://${DEFAULT_CLAW_HOST}:${DEFAULT_CLAW_PORT}\n` +
+      `  3. curl http://${DEFAULT_CLAW_HOST}:${DEFAULT_CLAW_PORT}/api/spec  # fetch OpenAPI 3 spec for code-gen\n` +
+      `  4. POST /query, /search, /research          # call features without the API key\n\n` +
+      `Discovery:\n` +
+      `  GET /api          Human-readable summary (CLAW_API_DOC)\n` +
+      `  GET /api/spec     OpenAPI 3.0 specification (also /openapi, /openapi.json)\n` +
+      `  pplx claw --print-api    Print the summary JSON and exit\n` +
+      `  pplx claw --print-spec   Print the OpenAPI spec JSON and exit\n\n` +
+      `Endpoints:\n` +
       `  GET    /health                 Liveness probe\n` +
-      `  GET    /api                    This document (also /openapi, /)\n` +
+      `  GET    /api                    Self-describing summary (also /)\n` +
+      `  GET    /api/spec               OpenAPI 3.0 specification\n` +
       `  GET    /models                 List models\n` +
       `  POST   /query                  body: { question, model?, ...filters }\n` +
       `  POST   /search                 body: { query, maxResults?, mode?, ... }\n` +
