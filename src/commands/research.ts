@@ -1,12 +1,81 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import fs from 'node:fs';
+import type { CompletionGetResponse, CompletionCreateResponse } from '@perplexity-ai/perplexity_ai/resources/async/chat/completions';
 import { getClient } from '../lib/client.js';
 import { resolveApiKey } from '../lib/config.js';
 import { handleError, exitNoApiKey } from '../lib/errors.js';
 import { createSpinner, printSuccess } from '../lib/output.js';
 import { formatCitations, type SearchResult } from '../lib/citations.js';
 import type { ResearchOptions } from '../lib/types.js';
+
+type AsyncResearchResult = CompletionGetResponse;
+
+export function extractResearchText(result: AsyncResearchResult): string {
+  const content = result.response?.choices?.[0]?.message?.content;
+  return typeof content === 'string' ? content : '';
+}
+
+export function renderResearchStatus(result: Pick<AsyncResearchResult, 'id' | 'status' | 'created_at' | 'completed_at'>): void {
+  console.log(chalk.cyan('Research Status:'));
+  console.log(`  ${chalk.white('ID:')} ${result.id}`);
+  console.log(`  ${chalk.white('Status:')} ${chalk.yellow(result.status)}`);
+
+  if (result.created_at) {
+    console.log(`  ${chalk.white('Created:')} ${new Date(result.created_at * 1000).toLocaleString()}`);
+  }
+  if (result.completed_at) {
+    console.log(`  ${chalk.white('Completed:')} ${new Date(result.completed_at * 1000).toLocaleString()}`);
+  }
+}
+
+export function renderResearchReport(
+  result: AsyncResearchResult,
+  opts: { json?: boolean; output?: string },
+): void {
+  if (result.status !== 'COMPLETED') {
+    console.log(chalk.yellow(`Research is not yet complete. Status: ${result.status}`));
+    return;
+  }
+
+  const response = result.response;
+  if (!response) {
+    console.log(chalk.yellow('No response data available.'));
+    return;
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  const text = extractResearchText(result);
+
+  console.log(chalk.cyan('Research Report:\n'));
+  console.log(chalk.white(text));
+
+  formatCitations(
+    response.citations as string[] | null,
+    response.search_results as unknown as SearchResult[] | null,
+  );
+
+  if (opts.output) {
+    fs.writeFileSync(opts.output, text);
+    printSuccess(`Report saved to ${opts.output}`);
+  }
+}
+
+export function renderResearchSubmission(asyncResponse: CompletionCreateResponse, wait: boolean): void {
+  const requestId = asyncResponse.id;
+  console.log(chalk.cyan('Research ID:'), chalk.yellow(requestId));
+  console.log(chalk.gray(`Status: ${asyncResponse.status}`));
+
+  if (!wait) {
+    console.log();
+    console.log(chalk.gray('Check status with:'), `pplx research status ${requestId}`);
+    console.log(chalk.gray('Get result with:'), `pplx research get ${requestId}`);
+  }
+}
 
 async function pollForCompletion(
   client: ReturnType<typeof getClient>,
@@ -17,7 +86,6 @@ async function pollForCompletion(
   const startTime = Date.now();
   const timeoutMs = opts.timeout * 60 * 1000;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     spinner.text = `Researching... (${elapsed}s elapsed)`;
@@ -26,33 +94,7 @@ async function pollForCompletion(
 
     if (result.status === 'COMPLETED') {
       spinner.stop();
-
-      const response = result.response;
-      if (!response) {
-        console.log(chalk.yellow('Research completed but no response returned.'));
-        return;
-      }
-
-      const content = response.choices?.[0]?.message?.content;
-      const text = typeof content === 'string' ? content : '';
-
-      if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
-      } else {
-        console.log(chalk.cyan('Research Report:\n'));
-        console.log(chalk.white(text));
-
-        formatCitations(
-          response.citations as string[] | null,
-          response.search_results as unknown as SearchResult[] | null,
-        );
-      }
-
-      if (opts.output) {
-        fs.writeFileSync(opts.output, text);
-        printSuccess(`Report saved to ${opts.output}`);
-      }
-
+      renderResearchReport(result, { json: opts.json, output: opts.output });
       return;
     }
 
@@ -73,6 +115,37 @@ async function pollForCompletion(
     }
 
     await new Promise((resolve) => setTimeout(resolve, opts.pollInterval * 1000));
+  }
+}
+
+async function startResearch(
+  topic: string,
+  opts: ResearchOptions,
+): Promise<void> {
+  const apiKey = resolveApiKey();
+  if (!apiKey) exitNoApiKey();
+
+  const client = getClient(apiKey);
+
+  try {
+    const spinner = createSpinner('Submitting research request...').start();
+
+    const asyncResponse = await client.async.chat.completions.create({
+      request: {
+        model: 'sonar-deep-research',
+        messages: [{ role: 'user', content: topic }],
+      },
+    });
+
+    spinner.stop();
+    renderResearchSubmission(asyncResponse, opts.wait);
+
+    if (!opts.wait) return;
+
+    console.log();
+    await pollForCompletion(client, asyncResponse.id, opts);
+  } catch (error) {
+    handleError(error, undefined, opts.verbose);
   }
 }
 
@@ -99,39 +172,7 @@ export function registerResearchCommand(program: Command): void {
         verbose: program.opts().verbose as boolean | undefined,
       };
 
-      const apiKey = resolveApiKey();
-      if (!apiKey) exitNoApiKey();
-
-      const client = getClient(apiKey);
-
-      try {
-        const spinner = createSpinner('Submitting research request...').start();
-
-        const asyncResponse = await client.async.chat.completions.create({
-          request: {
-            model: 'sonar-deep-research',
-            messages: [{ role: 'user', content: topic }],
-          },
-        });
-
-        spinner.stop();
-
-        const requestId = asyncResponse.id;
-        console.log(chalk.cyan('Research ID:'), chalk.yellow(requestId));
-        console.log(chalk.gray(`Status: ${asyncResponse.status}`));
-
-        if (!opts.wait) {
-          console.log();
-          console.log(chalk.gray('Check status with:'), `pplx research status ${requestId}`);
-          console.log(chalk.gray('Get result with:'), `pplx research get ${requestId}`);
-          return;
-        }
-
-        console.log();
-        await pollForCompletion(client, requestId, opts);
-      } catch (error) {
-        handleError(error, undefined, opts.verbose);
-      }
+      await startResearch(topic, opts);
     });
 
   research
@@ -145,17 +186,7 @@ export function registerResearchCommand(program: Command): void {
 
       try {
         const result = await client.async.chat.completions.get(requestId);
-
-        console.log(chalk.cyan('Research Status:'));
-        console.log(`  ${chalk.white('ID:')} ${result.id}`);
-        console.log(`  ${chalk.white('Status:')} ${chalk.yellow(result.status)}`);
-
-        if (result.created_at) {
-          console.log(`  ${chalk.white('Created:')} ${new Date(result.created_at * 1000).toLocaleString()}`);
-        }
-        if (result.completed_at) {
-          console.log(`  ${chalk.white('Completed:')} ${new Date(result.completed_at * 1000).toLocaleString()}`);
-        }
+        renderResearchStatus(result);
       } catch (error) {
         handleError(error, undefined, program.opts().verbose);
       }
@@ -174,44 +205,12 @@ export function registerResearchCommand(program: Command): void {
 
       try {
         const result = await client.async.chat.completions.get(requestId);
-
-        if (result.status !== 'COMPLETED') {
-          console.log(chalk.yellow(`Research is not yet complete. Status: ${result.status}`));
-          return;
-        }
-
-        const response = result.response;
-        if (!response) {
-          console.log(chalk.yellow('No response data available.'));
-          return;
-        }
-
-        if (options.json) {
-          console.log(JSON.stringify(result, null, 2));
-          return;
-        }
-
-        const content = response.choices?.[0]?.message?.content;
-        const text = typeof content === 'string' ? content : '';
-
-        console.log(chalk.cyan('Research Report:\n'));
-        console.log(chalk.white(text));
-
-        formatCitations(
-          response.citations as string[] | null,
-          response.search_results as unknown as SearchResult[] | null,
-        );
-
-        if (options.output) {
-          fs.writeFileSync(options.output, text);
-          printSuccess(`Report saved to ${options.output}`);
-        }
+        renderResearchReport(result, options);
       } catch (error) {
         handleError(error, undefined, program.opts().verbose);
       }
     });
 
-  // Make `pplx research "topic"` work as shorthand for `pplx research start "topic"`
   research
     .argument('[topic]', 'Research topic (shorthand for: research start "topic")')
     .option('--poll-interval <seconds>', 'Polling interval', '10')
@@ -221,7 +220,7 @@ export function registerResearchCommand(program: Command): void {
     .option('--json', 'Output as JSON')
     .action(async (topic: string | undefined, options: Record<string, unknown>) => {
       if (!topic) return;
-      // Delegate to start subcommand logic
+
       const opts: ResearchOptions = {
         pollInterval: parseInt(options.pollInterval as string, 10) || 10,
         timeout: parseInt(options.timeout as string, 10) || 30,
@@ -231,38 +230,6 @@ export function registerResearchCommand(program: Command): void {
         verbose: program.opts().verbose as boolean | undefined,
       };
 
-      const apiKey = resolveApiKey();
-      if (!apiKey) exitNoApiKey();
-
-      const client = getClient(apiKey);
-
-      try {
-        const spinner = createSpinner('Submitting research request...').start();
-
-        const asyncResponse = await client.async.chat.completions.create({
-          request: {
-            model: 'sonar-deep-research',
-            messages: [{ role: 'user', content: topic }],
-          },
-        });
-
-        spinner.stop();
-
-        const requestId = asyncResponse.id;
-        console.log(chalk.cyan('Research ID:'), chalk.yellow(requestId));
-        console.log(chalk.gray(`Status: ${asyncResponse.status}`));
-
-        if (!opts.wait) {
-          console.log();
-          console.log(chalk.gray('Check status with:'), `pplx research status ${requestId}`);
-          console.log(chalk.gray('Get result with:'), `pplx research get ${requestId}`);
-          return;
-        }
-
-        console.log();
-        await pollForCompletion(client, requestId, opts);
-      } catch (error) {
-        handleError(error, undefined, opts.verbose);
-      }
+      await startResearch(topic, opts);
     });
 }

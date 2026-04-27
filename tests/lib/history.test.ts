@@ -21,11 +21,13 @@ describe('history', () => {
   beforeEach(() => {
     _resetConfigDir();
     process.env.PERPLEXITY_CONFIG_DIR = TEST_DIR;
+    process.env.PPLX_DISABLE_KEYCHAIN = '1';
   });
 
   afterEach(() => {
     _resetConfigDir();
     delete process.env.PERPLEXITY_CONFIG_DIR;
+    delete process.env.PPLX_DISABLE_KEYCHAIN;
     if (fs.existsSync(TEST_DIR)) {
       fs.rmSync(TEST_DIR, { recursive: true, force: true });
     }
@@ -121,6 +123,55 @@ describe('history', () => {
 
     it('returns undefined for latest thread when none exist', () => {
       expect(getLatestThreadId()).toBeUndefined();
+    });
+
+    it('skips malformed thread files in listThreads', () => {
+      const id = createThread('sonar');
+      saveThread(id, 'sonar', [{ role: 'user', content: 'hi' }]);
+      const malformedPath = path.join(TEST_DIR, 'threads', 'broken.json');
+      fs.writeFileSync(malformedPath, 'not json');
+
+      const threads = listThreads();
+      expect(threads).toHaveLength(1);
+      expect(threads[0].id).toBe(id);
+    });
+
+    it('skips malformed thread files in getLatestThreadId', () => {
+      const id = createThread('sonar');
+      const malformedPath = path.join(TEST_DIR, 'threads', 'broken.json');
+      fs.writeFileSync(malformedPath, 'not json');
+      expect(getLatestThreadId()).toBe(id);
+    });
+
+    it('returns null when reading malformed thread by id', () => {
+      const malformedPath = path.join(TEST_DIR, 'threads', 'bad-id.json');
+      fs.mkdirSync(path.dirname(malformedPath), { recursive: true });
+      fs.writeFileSync(malformedPath, 'not json');
+      expect(getThread('bad-id')).toBeNull();
+    });
+  });
+
+  describe('saveToHistory edge cases', () => {
+    it('saves entry without response or citations', () => {
+      saveToHistory('Q', 'sonar');
+      const history = getHistory();
+      expect(history[0].question).toBe('Q');
+      expect(history[0].responsePreview).toBeUndefined();
+      expect(history[0].citations).toBeUndefined();
+    });
+
+    it('truncates response previews', () => {
+      const long = 'x'.repeat(1000);
+      saveToHistory('Q', 'sonar', long, 0);
+      const history = getHistory();
+      expect(history[0].responsePreview!.length).toBeLessThan(long.length);
+    });
+
+    it('returns empty array when history file is malformed', () => {
+      const historyPath = path.join(TEST_DIR, 'history.json');
+      fs.mkdirSync(TEST_DIR, { recursive: true });
+      fs.writeFileSync(historyPath, 'not json');
+      expect(getHistory()).toEqual([]);
     });
   });
 });

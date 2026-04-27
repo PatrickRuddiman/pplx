@@ -8,6 +8,13 @@ const MAX_HISTORY = 100;
 const MAX_THREADS = 50;
 const PREVIEW_LENGTH = 200;
 
+let _lastTimestamp = 0;
+function nowMonotonic(): number {
+  const now = Date.now();
+  _lastTimestamp = now > _lastTimestamp ? now : _lastTimestamp + 1;
+  return _lastTimestamp;
+}
+
 function getHistoryPath(): string {
   return path.join(getConfigDir(), 'history.json');
 }
@@ -56,7 +63,7 @@ export function saveToHistory(
     id: crypto.randomUUID(),
     question,
     model,
-    timestamp: Date.now(),
+    timestamp: nowMonotonic(),
     responsePreview: response ? response.substring(0, PREVIEW_LENGTH) : undefined,
     citations: citationCount,
   });
@@ -89,10 +96,11 @@ export function getThread(threadId: string): ThreadFile | null {
 
 export function createThread(model: string): string {
   const id = crypto.randomUUID();
+  const ts = nowMonotonic();
   const thread: ThreadFile = {
     id,
-    created: Date.now(),
-    updated: Date.now(),
+    created: ts,
+    updated: ts,
     model,
     messages: [],
   };
@@ -111,8 +119,8 @@ export function saveThread(
   const existing = getThread(threadId);
   const thread: ThreadFile = {
     id: threadId,
-    created: existing?.created ?? Date.now(),
-    updated: Date.now(),
+    created: existing?.created ?? nowMonotonic(),
+    updated: nowMonotonic(),
     model,
     messages,
   };

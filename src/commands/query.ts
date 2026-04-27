@@ -19,7 +19,7 @@ import { saveToHistory } from '../lib/history.js';
 import { getThread, saveThread, getLatestThreadId, createThread } from '../lib/history.js';
 import { DEFAULT_SYSTEM_PROMPT, type QueryOptions } from '../lib/types.js';
 
-function buildMessages(
+export function buildMessages(
   question: string,
   systemPrompt: string,
   threadMessages?: Array<{ role: string; content: string }>,
@@ -38,7 +38,7 @@ function buildMessages(
   return messages;
 }
 
-function buildBaseParams(messages: Array<{ role: string; content: string }>, opts: QueryOptions) {
+export function buildBaseParams(messages: Array<{ role: string; content: string }>, opts: QueryOptions) {
   const params: Record<string, unknown> = {
     model: opts.model,
     messages,
@@ -65,7 +65,7 @@ function buildBaseParams(messages: Array<{ role: string; content: string }>, opt
   if (opts.related) params.return_related_questions = true;
   if (opts.reasoning) params.reasoning_effort = opts.reasoning;
   if (opts.language) params.search_language_filter = [opts.language];
-  if (!opts.search) params.disable_search = true;
+  if (opts.search === false) params.disable_search = true;
   if (opts.safeSearch) params.safe_search = true;
 
   if (opts.contextSize) {
