@@ -26,6 +26,20 @@ describe('config', () => {
     it('uses PERPLEXITY_CONFIG_DIR when set', () => {
       expect(getConfigDir()).toBe(TEST_DIR);
     });
+
+    it('uses XDG_CONFIG_HOME when PERPLEXITY_CONFIG_DIR is not set', () => {
+      _resetConfigDir();
+      delete process.env.PERPLEXITY_CONFIG_DIR;
+      const xdg = path.join(os.tmpdir(), 'pplx-xdg-' + Date.now());
+      const prevXdg = process.env.XDG_CONFIG_HOME;
+      process.env.XDG_CONFIG_HOME = xdg;
+      try {
+        expect(getConfigDir()).toBe(path.join(xdg, 'pplx'));
+      } finally {
+        if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+        else process.env.XDG_CONFIG_HOME = prevXdg;
+      }
+    });
   });
 
   describe('getConfig / saveConfig', () => {
@@ -99,6 +113,15 @@ describe('config', () => {
 
     it('defaults to sonar', () => {
       expect(resolveModel()).toBe('sonar');
+    });
+  });
+
+  describe('error paths', () => {
+    it('returns empty config when file is malformed', () => {
+      const dir = TEST_DIR;
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'config.json'), 'not json');
+      expect(getConfig()).toEqual({});
     });
   });
 });
